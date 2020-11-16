@@ -155,8 +155,12 @@ add_action( 'wp_enqueue_scripts', 'wp_vue_scripts' );
 
 add_action( 'wp_enqueue_scripts', function() {
 
+    wp_enqueue_media();
+
     wp_enqueue_script('vue', get_template_directory_uri() . '/assets/js/vue.js', null, null, true); // change to vue.min.js for production
     wp_enqueue_script('axios', get_template_directory_uri() . '/assets/js/axios.min.js', null, null, true); // change to vue.min.js for production
+    wp_enqueue_script('moment', get_template_directory_uri() . '/assets/js/moment.js', null, null, true); // change to vue.min.js for production
+    wp_enqueue_script('bootstrap-main-js', get_template_directory_uri() . '/assets/js/bootstrap.min.js', array('jquery'), null, true);
     wp_enqueue_script('main', get_template_directory_uri() . '/assets/js/main.js', 'vue', null, true);
 });
 
