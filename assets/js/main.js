@@ -1,3 +1,15 @@
+function getSupportById(supports, supportId) {
+    let result;
+
+    Object.keys(supports).forEach(function (key) {
+        if (supports[key]['id'] === parseInt(supportId)) {
+            result = supports[key];
+        }
+    });
+
+    return result;
+}
+
 Vue.component('add-post', {
     data() {
         return {
@@ -18,7 +30,7 @@ Vue.component('add-post', {
                 featured_media: 0
             };
         },
-        addImage(){
+        addImage() {
 
             // Instantiates the variable that holds the media library frame.
             var meta_image;
@@ -34,8 +46,8 @@ Vue.component('add-post', {
                 button: {
                     text: 'Select'
                 },
-                library : {
-                    type : 'image'
+                library: {
+                    type: 'image'
                 },
                 multiple: false  // Set to true to allow multiple files to be selected
             });
@@ -48,7 +60,6 @@ Vue.component('add-post', {
 
                 // Sends the attachment URL to our custom image input field.
                 jQuery('#addProductImageId').val(media_attachment.id);
-                // this.newPost.featured_media = media_attachment.id;
 
             });
 
@@ -98,10 +109,10 @@ Vue.component('add-post', {
                   <textarea class="form-control" id="post-content"
                             v-model="newPost.content"></textarea>
                 </div>
-                
+
                 <div>
-                    <button type="button" class="btn btn-primary" v-on:click="addImage">Add image</button>
-                    <input type="hidden" id="addProductImageId">
+                  <button type="button" class="btn btn-primary" v-on:click="addImage">Add image</button>
+                  <input type="hidden" id="addProductImageId">
                 </div>
 
               </form>
@@ -133,6 +144,12 @@ Vue.component('posts-list', {
         deletePost(post) {
             const postIndex = this.posts.indexOf(post);
             this.posts.splice(postIndex, 1);
+        },
+        updatePost(post){
+            let updatePost = getSupportById( this.posts, post.id);
+            updatePost.title.rendered = post.title;
+            updatePost.content.rendered = post.content;
+            updatePost.featured_media = post.featured_media;
         }
     },
     created() {
@@ -148,7 +165,8 @@ Vue.component('posts-list', {
         '<div class="card-deck">' +
         '<posts-item ' +
         'v-on:delete-post="deletePost"' +
-        'v-for="(post , index) in this.posts" :key="post.id" :post.sync="post"></posts-item>' +
+        ' v-on:update-post="updatePost"' +
+        ' v-for="(post , index) in this.posts" :key="post.id" :post.sync="post"></posts-item>' +
         '</div>' +
         '</div>' +
         '</div>' +
@@ -158,7 +176,15 @@ Vue.component('posts-list', {
 Vue.component('posts-item', {
     data() {
         return {
-            image: ''
+            image: '',
+            isEditing: false,
+            updatePostData: {
+                id: this.post.id,
+                title: this.post.title.rendered,
+                content: this.post.content.rendered,
+                modified: this.post.modified,
+                featured_media: ''
+            }
         }
     },
     props: ['post'],
@@ -182,6 +208,66 @@ Vue.component('posts-item', {
         }
     },
     methods: {
+        updatePostImage() {
+            // Instantiates the variable that holds the media library frame.
+            var meta_image;
+
+            // If the frame already exists, re-open it.
+            if (meta_image) {
+                meta_image.open();
+                return;
+            }
+
+            // Sets up the media library frame
+            meta_image = wp.media.frames.meta_image = wp.media({
+                button: {
+                    text: 'Select'
+                },
+                library: {
+                    type: 'image'
+                },
+                multiple: false  // Set to true to allow multiple files to be selected
+            });
+
+            // Runs when an image is selected.
+            meta_image.on('select', function () {
+
+                // Grabs the attachment selection and creates a JSON representation of the model.
+                var media_attachment = meta_image.state().get('selection').first().toJSON();
+
+                // Sends the attachment URL to our custom image input field.
+                jQuery('#updateImagePost').attr('src', media_attachment.url);
+                jQuery('#updateImagePostId').val(media_attachment.id);
+
+            });
+
+            // Opens the media library frame.
+            meta_image.open();
+        },
+        showUpdateFormPost() {
+            this.isEditing = true;
+        },
+        updatePost() {
+            this.updatePostData.featured_media = jQuery('#updateImagePostId').val() ? jQuery('#updateImagePostId').val() : this.post.featured_media;
+            this.updatePostData.modified = moment();
+
+            this.$emit('update-post', this.updatePostData);
+
+            axios.post('http://localhost/wp-json/wp/v2/posts/' + this.updatePostData.id, this.updatePostData, {
+                headers: {'X-WP-Nonce': wpApiSettings.nonce}
+            })
+                .then((response) => {
+                    // console.log(response.data);
+                    this.cancelUpdatePost();
+                })
+                .catch(function (err) {
+                    console.log(err);
+                });
+
+        },
+        cancelUpdatePost() {
+            this.isEditing = false;
+        },
         deletePostFromItem(post) {
             this.$emit('delete-post', post);
             axios.delete('http://localhost/wp-json/wp/v2/posts/' + post.id, {
@@ -193,18 +279,36 @@ Vue.component('posts-item', {
                 });
         }
     },
-    template: '<div>' +
-        '<div class="card" style="width: 18rem;">\n' +
-        '  <img class="card-img-top" :src="this.featureImage" alt="Card image cap">\n' +
-        '  <div class="card-body">\n' +
-        '    <h5 class="card-title">{{post.title.rendered}}</h5>\n' +
-        '    <p class="card-text" v-html="post.content.rendered"></p>\n' +
-        '<a v-bind:href="` ${post.link} `" class="btn btn-primary">Read</a>' +
-        '<a class="btn btn-danger" v-on:click="deletePostFromItem(post)">Delete</a>' +
-        '  </div>\n' +
-        '</div>' +
+    template:
+            `
+      <div>
+      <div class="card" style="width: 18rem;">
 
-        '</div>'
+        <div class="" v-show="!isEditing">
+          <img class="card-img-top" :src="this.featureImage" alt="Card image cap">
+          <div class="card-body">
+            <h5 class="card-title">{{ post.title.rendered }}</h5>
+            <p class="card-text" v-html="post.content.rendered"></p>
+            <a v-bind:href="post.link" class="btn btn-primary">Read</a>
+            <a class="btn btn-warning" v-on:click="showUpdateFormPost">Update</a>
+            <a class="btn btn-danger" v-on:click="deletePostFromItem(post)">Delete</a>
+          </div>
+        </div>
+
+        <div class="" v-show="isEditing">
+          <img :src="this.featureImage" id="updateImagePost" v-on:click="updatePostImage">
+          <input type="hidden" id="updateImagePostId">
+          <input class="" v-model="updatePostData.title">
+          <textarea class="" v-model="updatePostData.content"></textarea>
+          <a class="btn btn-success" v-on:click="updatePost">Save</a>
+          <a class="btn btn-danger" v-on:click="cancelUpdatePost">Cancel</a>
+
+
+        </div>
+
+      </div>
+
+      </div>`
 });
 
 new Vue({
